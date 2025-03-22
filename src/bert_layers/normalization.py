@@ -88,11 +88,26 @@ if layer_norm_fn is not None:
 else:
     TritonLayerNorm = None
 
+
+class DyT(nn.Module):
+    def __init__(self, num_features, alpha_init_value=0.5):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init_value)
+        self.weight = nn.Parameter(torch.ones(num_features))
+        self.bias = nn.Parameter(torch.zeros(num_features))
+    
+    def forward(self, x):
+        x = torch.tanh(self.alpha * x)
+        return x * self.weight + self.bias
+
+
+
 NORM2CLS = {
     "layernorm": nn.LayerNorm,
     "triton_layernorm": TritonLayerNorm if TritonLayerNorm is not None else nn.LayerNorm,
     "rmsnorm": RMSNorm,
     "triton_rmsnorm": TritonRMSNorm if TritonRMSNorm is not None else RMSNorm,
+    "dynamic_tanh": DyT # https://jiachenzhu.github.io/DyT/
 }
 
 
