@@ -1,65 +1,87 @@
-import sentencepiece as spm
-import json
+import os
+from tqdm.auto import tqdm
+from tokenizers import Tokenizer
+from tokenizers.models import Unigram
+from tokenizers.normalizers import Sequence, NFKC, Lowercase
+from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.trainers import UnigramTrainer
+from tokenizers.processors import TemplateProcessing
+from transformers import PreTrainedTokenizerFast
+from datasets import load_dataset
 
-model_prefix    = "turkish_bert_spm"
-special_tokens  = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+def train_unigram_tokenizer(
+    parquet_dir="data/texts",
+    output_dir="turkish_sp_unigram",
+    vocab_size=32_000,
+    n_sub_iterations=3,
+    shrinking_factor=0.99,
+    use_manual_postproc=True,
+):
+    # 1) Initialize Unigram tokenizer
+    tokenizer = Tokenizer(Unigram())
+    tokenizer.normalizer = Sequence([NFKC(), Lowercase()])
+    tokenizer.pre_tokenizer = Whitespace()
 
-# 4) Train SentencePiece
-spm.SentencePieceTrainer.Train(
-    input=["tr_article_2.txt", "tr_thesis_1.txt"],
-    model_prefix="turkish_bert_spm",
-    vocab_size=32000,
-    model_type="unigram",
-    character_coverage=0.9999,
-    pad_id=0,
-    unk_id=1,
-    bos_id=2,
-    eos_id=3,
-    pad_piece='[PAD]',
-    unk_piece='[UNK]',
-    bos_piece='[CLS]',
-    eos_piece='[SEP]',
-    user_defined_symbols='[MASK]',
-    hard_vocab_limit=False,
-    max_sentence_length=2048,
-    byte_fallback=True,
-    train_extremely_large_corpus=False,
-    accept_language="tr",
-    normalization_rule_name="nmt_nfkc_cf",
-    num_sub_iterations=15,
-    split_digits=True,
-)
+    # 2) Configure the trainer
+    trainer = UnigramTrainer(
+        vocab_size=vocab_size,
+        unk_token= "[UNK]",
+        special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
+        n_sub_iterations=n_sub_iterations,
+        shrinking_factor=shrinking_factor,
+    )
 
+    # 3) Stream all Parquet files
+    data_files = os.path.join(parquet_dir, "*.parquet")
+    ds = load_dataset(
+        "parquet",
+        data_files=data_files,
+        split="train",
+        streaming=True,
+    )
 
-# 5) Load & verify
-sp = spm.SentencePieceProcessor(model_file=f"{model_prefix}.model")
-print("Special token IDs:")
-for tok in special_tokens:
-    print(f"  {tok:6s} -> {sp.piece_to_id(tok)}")
+    # 4) Optional: apply Turkish-aware lowercasing here
+    def iterator():
+        for ex in ds:
+            text = ex.get("text", "")
+            yield text
 
+    # 5) Train
+    tokenizer.train_from_iterator(
+        tqdm(iterator(), desc="Training Unigram tokenizer"),
+        trainer=trainer,
+    )
 
-# 6) Save BERT‐style vocab
-with open(f"{model_prefix}.vocab", "w", encoding="utf-8") as f:
-    for i in range(sp.get_piece_size()):
-        f.write(f"{sp.id_to_piece(i)}\t{i}\n")
+    # 6) Post-processing for BERT (optional)
+    if use_manual_postproc:
+        tokenizer.post_processor = TemplateProcessing(
+            single="[CLS]:0 $A:0 [SEP]:0",
+            pair="[CLS]:0 $A:0 [SEP]:0 $B:1 [SEP]:1",
+            special_tokens=[
+                ("[CLS]", tokenizer.token_to_id("[CLS]")),
+                ("[SEP]", tokenizer.token_to_id("[SEP]")),
+            ],
+        )
 
+    # 7) Save raw JSON
+    os.makedirs(output_dir, exist_ok=True)
+    json_path = os.path.join(output_dir, "tokenizer.json")
+    tokenizer.save(json_path)
 
-"""
-# 7) Save minimal JSON config
-config = {
-    "do_lower_case": False,
-    "vocab_size": sp.get_piece_size(),
-    "model_type": "unigram",
-    "special_tokens": {
-        "pad_token":   "[PAD]",
-        "unk_token":   "[UNK]",
-        "cls_token":   "[CLS]",
-        "sep_token":   "[SEP]",
-        "mask_token":  "[MASK]"
-    }
-}
-with open(f"{model_prefix}.json", "w", encoding="utf-8") as f:
-    json.dump(config, f, ensure_ascii=False, indent=2)
-"""
+    # 8) Wrap as a HF fast tokenizer without needing AutoTokenizer
+    hf_tok = PreTrainedTokenizerFast(
+        tokenizer_file=json_path,
+        unk_token="[UNK]",
+        pad_token="[PAD]",
+        cls_token="[CLS]",
+        sep_token="[SEP]",
+        mask_token="[MASK]",
+        model_max_length=512,
+        type_vocab_size=2,
+    )
+    hf_tok.save_pretrained(output_dir)
 
-print("Done. Generated .model, .vocab, .json under", model_prefix + ".*")
+    print(f"Tokenizer saved to {output_dir}/")
+
+if __name__ == "__main__":
+    train_unigram_tokenizer()
