@@ -17,6 +17,8 @@ from __future__ import annotations
 from typing import Any, Callable, Iterable
 
 import torch
+import math
+from torch.optim import Optimizer
 from torch import Tensor
 from torch.optim.optimizer import _default_to_fused_or_foreach
 from torch.utils._foreach_utils import _group_tensors_by_device_and_dtype
