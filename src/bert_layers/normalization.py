@@ -85,14 +85,40 @@ if layer_norm_fn is not None:
                 prenorm=prenorm,
                 residual_in_fp32=residual_in_fp32,
             )
+
 else:
     TritonLayerNorm = None
 
+
+class DynamicTanh(nn.Module):
+    def __init__(self, normalized_shape, channels_last=True, alpha_init_value=0.5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.alpha_init_value = alpha_init_value
+        self.channels_last = channels_last
+
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init_value)
+        self.weight = nn.Parameter(torch.ones(normalized_shape))
+        self.bias = nn.Parameter(torch.zeros(normalized_shape))
+
+    def forward(self, x):
+        x = torch.tanh(self.alpha * x)
+        if self.channels_last:
+            x = x * self.weight + self.bias
+        else:
+            x = x * self.weight[:, None, None] + self.bias[:, None, None]
+        return x
+
+    def extra_repr(self):
+        return f"normalized_shape={self.normalized_shape}, alpha_init_value={self.alpha_init_value}, channels_last={self.channels_last}"
+
+
 NORM2CLS = {
     "layernorm": nn.LayerNorm,
-    "triton_layernorm": TritonLayerNorm if TritonLayerNorm is not None else nn.LayerNorm,
+    "triton_layernorm": (TritonLayerNorm if TritonLayerNorm is not None else nn.LayerNorm),
     "rmsnorm": RMSNorm,
     "triton_rmsnorm": TritonRMSNorm if TritonRMSNorm is not None else RMSNorm,
+    "dynamic_tanh": DynamicTanh,  # https://jiachenzhu.github.io/DyT/
 }
 
 
@@ -108,9 +134,13 @@ def get_norm_layer(config: FlexBertConfig, compiled_norm: bool = False) -> nn.Mo
             norm = config.normalization
         signature = inspect.signature(NORM2CLS[norm])
         if hasattr(config, "norm_kwargs"):
-            norm_kwargs = {k: v for k, v in config.norm_kwargs.items() if k in signature.parameters}
+            norm_kwargs = {
+                k: v for k, v in config.norm_kwargs.items() if k in signature.parameters
+            }
         else:
             norm_kwargs = {}
         return NORM2CLS[norm](config.hidden_size, **norm_kwargs)
     except KeyError:
-        raise ValueError(f"Invalid normalization layer type: {config.normalization}, must be one of {NORM2CLS.keys()}.")
+        raise ValueError(
+            f"Invalid normalization layer type: {config.normalization}, must be one of {NORM2CLS.keys()}."
+        )
