@@ -164,6 +164,8 @@ cython_debug/
 
 # weights and biases
 wandb/
+data/
+ModernBERT.code-workspace
 
 # OS X
 .DS_Store
