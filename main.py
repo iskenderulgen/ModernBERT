@@ -257,6 +257,18 @@ def build_optimizer(cfg, model):
             weight_decay=cfg.weight_decay,
             decouple_lr=True,
         )
+
+    elif cfg.name.lower() == "ademamix":
+        try:
+            from src.optimizer import AdEMAMix
+        except ImportError:
+            raise ImportError("Install `pip install torch-adema` to use the AdEMAMix optimizer.")
+
+        return AdEMAMix(
+            params,
+            lr=cfg.lr,
+            weight_decay=cfg.weight_decay,
+        )
     else:
         raise ValueError(f"Not sure how to build optimizer: {cfg.name}")
 
@@ -462,7 +474,7 @@ def main(cfg: DictConfig, return_trainer: bool = False, do_train: bool = True) -
         load_weights_only=cfg.get("load_weights_only", False),
         python_log_level=cfg.get("python_log_level", None),
         autoresume=cfg.get("autoresume", None),
-        fsdp_config=cfg.get("fsdp_config", None),
+        # fsdp_config=cfg.get("fsdp_config", None),
         compile_config=cfg.get("compile_config", None),
     )
 
@@ -507,12 +519,14 @@ def main(cfg: DictConfig, return_trainer: bool = False, do_train: bool = True) -
 
 
 if __name__ == "__main__":
-    yaml_path, args_list = sys.argv[1], sys.argv[2:]
-    with open("yamls/defaults.yaml") as f:
-        default_cfg = om.load(f)
-    with open(yaml_path) as f:
-        yaml_cfg = om.load(f)
-    cli_cfg = om.from_cli(args_list)
-    cfg = om.merge(default_cfg, yaml_cfg, cli_cfg)
-    cfg = cast(DictConfig, cfg)  # for type checking
+    # ←–– simply point this at whatever YAML you want to run
+    yaml_path = "yamls/main/flex-bert-base.yaml"
+
+    # load default + user config
+    default_cfg = om.load("yamls/defaults.yaml")
+    yaml_cfg    = om.load(yaml_path)
+
+    # merge and run
+    cfg = om.merge(default_cfg, yaml_cfg)
+    cfg = cast(DictConfig, cfg)
     main(cfg)
