@@ -165,6 +165,7 @@ cython_debug/
 # weights and biases
 wandb/
 data/
+.idea/
 ModernBERT.code-workspace
 
 # OS X
