@@ -20,7 +20,7 @@ from typing import Optional, Union, List
 import torch
 import torch.nn as nn
 
-import bert_padding
+import src.bert_padding as bert_padding
 
 from .activation import get_act_fn
 from .attention import FlexBertAttentionBase, BertAlibiUnpadAttention, get_attention_layer

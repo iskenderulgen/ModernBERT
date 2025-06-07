@@ -67,7 +67,7 @@ from transformers.modeling_outputs import (
 )
 from transformers.models.bert.modeling_bert import BertPreTrainedModel
 
-from bert_padding import index_put_first_axis
+from src.bert_padding import index_put_first_axis
 
 from src.bert_layers.activation import get_act_fn
 from src.bert_layers.attention import (
