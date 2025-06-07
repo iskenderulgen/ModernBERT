@@ -21,7 +21,7 @@ import importlib.metadata
 import logging
 import math
 
-import bert_padding
+import src.bert_padding
 from .configuration_bert import FlexBertConfig, maybe_add_padding
 from .normalization import get_norm_layer
 from .initialization import ModuleType, init_weights
