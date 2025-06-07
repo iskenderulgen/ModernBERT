@@ -381,8 +381,8 @@ class AdEMAMix(Optimizer):
     """
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999, 0.9999), alpha=2.0, 
-                 beta3_warmup=None, alpha_warmup=None,  eps=1e-8,
-                 weight_decay=0):
+                 beta3_warmup=1000, alpha_warmup=1000,  eps=1e-8,
+                 weight_decay=0.01):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -476,6 +476,15 @@ class AdEMAMix(Optimizer):
                 denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(eps)
 
                 update = (exp_avg_fast.div(bias_correction1) + alpha * exp_avg_slow) / denom
+
+                # fused, bias-corrected AdEMAMix update
+                update = (exp_avg_fast.div(bias_correction1) + alpha * exp_avg_slow) / denom
+
+                # ---------- cautious mask borrowed from C-AdamW ----------
+                mask = (update * grad > 0).to(grad.dtype)          # ① keep aligned coords
+                mask.div_(mask.mean().clamp(min=1e-3))             # ② re-scale
+                update.mul_(mask)                                   # ③ apply mask
+                # ---------------------------------------------------------
 
                 # decay
                 update.add_(p, alpha=lmbda)
