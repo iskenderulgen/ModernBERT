@@ -477,15 +477,6 @@ class AdEMAMix(Optimizer):
 
                 update = (exp_avg_fast.div(bias_correction1) + alpha * exp_avg_slow) / denom
 
-                # fused, bias-corrected AdEMAMix update
-                update = (exp_avg_fast.div(bias_correction1) + alpha * exp_avg_slow) / denom
-
-                # ---------- cautious mask borrowed from C-AdamW ----------
-                mask = (update * grad > 0).to(grad.dtype)          # ① keep aligned coords
-                mask.div_(mask.mean().clamp(min=1e-3))             # ② re-scale
-                update.mul_(mask)                                   # ③ apply mask
-                # ---------------------------------------------------------
-
                 # decay
                 update.add_(p, alpha=lmbda)
 
