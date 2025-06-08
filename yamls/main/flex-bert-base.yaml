@@ -109,8 +109,15 @@ scheduler:
 
 optimizer:
   name: AdEMAMix
-  lr: 1e-3 # Peak learning rate
-  weight_decay: 1.0e-5 # Amount of weight decay regularization
+  lr: 1e-2
+  betas:
+    - 0.9
+    - 0.999
+    - 0.9999
+  alpha: 2.0
+  beta3_warmup: 45
+  alpha_warmup: 45
+  weight_decay: 0.1
   filter_bias_norm_wd: true # If True, doesn't apply weight decay to norm layers and biases
 
 # algorithms:

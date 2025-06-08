@@ -267,6 +267,11 @@ def build_optimizer(cfg, model):
         return AdEMAMix(
             params,
             lr=cfg.lr,
+            betas=list(cfg.get("betas", (0.9, 0.999, 0.9999))),
+            alpha=cfg.get("alpha", 2.0),
+            beta3_warmup=cfg.get("beta3_warmup", 1000),
+            alpha_warmup=cfg.get("alpha_warmup", 1000),
+            eps=cfg.get("eps", 1e-8),
             weight_decay=cfg.weight_decay,
         )
     else:
